@@ -31,6 +31,22 @@ assert 'ru.keepcoder.Telegram' in source
 p.write_text(source.replace('ru.keepcoder.Telegram', 'org.freng35.TelegramTopicBadgeTest'))
 PY
 
+if ! scripts/flatc --version >/dev/null 2>&1; then
+  mkdir -p .build-tools
+  if [ ! -x .build-tools/flatc ]; then
+    FLATBUFFERS_SOURCE="${RUNNER_TEMP}/topic-badge-flatbuffers"
+    git clone --depth 1 --branch v24.12.23 https://github.com/google/flatbuffers.git "$FLATBUFFERS_SOURCE"
+    [ "$(git -C "$FLATBUFFERS_SOURCE" rev-parse HEAD)" = a2cd1ea3b6d3fee220106b5fed3f7ce8da9eb757 ]
+    cmake -S "$FLATBUFFERS_SOURCE" -B "$FLATBUFFERS_SOURCE/build" \
+      -DCMAKE_BUILD_TYPE=Release -DFLATBUFFERS_BUILD_TESTS=OFF \
+      -DFLATBUFFERS_BUILD_FLATLIB=OFF -DFLATBUFFERS_BUILD_SHAREDLIB=OFF
+    cmake --build "$FLATBUFFERS_SOURCE/build" --target flatc --parallel 4
+    cp "$FLATBUFFERS_SOURCE/build/flatc" .build-tools/flatc
+  fi
+  cp .build-tools/flatc scripts/flatc
+fi
+scripts/flatc --version | tee build-logs/flatc-version.log
+
 sh scripts/configure_frameworks.sh 2>&1 | tee build-logs/frameworks.log
 
 xcodebuild -workspace Telegram-Mac.xcworkspace \

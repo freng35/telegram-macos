@@ -41,9 +41,10 @@ jobs:
         with:
           path: |
             core-xprojects/*/build
+            .build-tools/flatc
             packages/WalletEngine/wallet_engineFFI.xcframework
             submodules/telegram-ios/submodules/MTProtoRustEngine/MTProtoEngineFFI.xcframework
-          key: native-topic-badge-xcode26.6-intel-v1-26a0c506
+          key: native-topic-badge-xcode26.6-intel-v2-26a0c506
       - name: Check regression scenarios
         run: python3 tools/tests/folder-topic-badges/run.py 2>&1 | tee build-logs/regressions.log
       - name: Build native libraries and test client
@@ -54,9 +55,10 @@ jobs:
         with:
           path: |
             core-xprojects/*/build
+            .build-tools/flatc
             packages/WalletEngine/wallet_engineFFI.xcframework
             submodules/telegram-ios/submodules/MTProtoRustEngine/MTProtoEngineFFI.xcframework
-          key: native-topic-badge-xcode26.6-intel-v1-26a0c506
+          key: native-topic-badge-xcode26.6-intel-v2-26a0c506
       - name: Upload test client
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
