@@ -1,0 +1,73 @@
+name: Build topic badge test client
+on:
+  push:
+    branches: [codex/build-muted-topics-client]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: topic-badge-test-client
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-26-intel
+    timeout-minutes: 360
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      CMAKE_POLICY_VERSION_MINIMUM: '3.5'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check toolchain and disk
+        run: |
+          xcodebuild -version
+          swift --version
+          df -h .
+          mkdir -p build-logs
+      - name: Fetch public submodules
+        run: |
+          git config --global url.https://github.com/.insteadOf git@github.com:
+          git submodule update --init --recursive --depth 1 --jobs 4 2>&1 | tee build-logs/submodules.log
+      - name: Install build tools
+        run: brew install cmake ninja meson nasm yasm zlib autoconf libtool automake pkg-config
+      - name: Restore native build cache
+        id: native-cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            core-xprojects/*/build
+            packages/WalletEngine/wallet_engineFFI.xcframework
+            submodules/telegram-ios/submodules/MTProtoRustEngine/MTProtoEngineFFI.xcframework
+          key: native-topic-badge-xcode26.6-intel-v1-26a0c506
+      - name: Check regression scenarios
+        run: python3 tools/tests/folder-topic-badges/run.py 2>&1 | tee build-logs/regressions.log
+      - name: Build native libraries and test client
+        run: bash scripts/build-topic-badge-client.sh
+      - name: Save native build cache
+        if: always() && steps.native-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            core-xprojects/*/build
+            packages/WalletEngine/wallet_engineFFI.xcframework
+            submodules/telegram-ios/submodules/MTProtoRustEngine/MTProtoEngineFFI.xcframework
+          key: native-topic-badge-xcode26.6-intel-v1-26a0c506
+      - name: Upload test client
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Telegram-TopicBadge-Test-arm64
+          path: |
+            dist/Telegram-TopicBadge-Test-arm64.zip
+            dist/build-manifest.txt
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: topic-badge-build-logs
+          path: build-logs
+          retention-days: 3
