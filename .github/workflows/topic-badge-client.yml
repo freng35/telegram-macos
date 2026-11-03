@@ -8,6 +8,9 @@ permissions:
 concurrency:
   group: topic-badge-test-client
   cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
 jobs:
   build:
     runs-on: macos-26-intel
@@ -29,7 +32,7 @@ jobs:
       - name: Fetch public submodules
         run: |
           git config --global url.https://github.com/.insteadOf git@github.com:
-          git submodule update --init --recursive --depth 1 --jobs 4 2>&1 | tee build-logs/submodules.log
+          git submodule update --init --recursive --depth 1 --jobs 4 -- submodules 2>&1 | tee build-logs/submodules.log
       - name: Install build tools
         run: brew install cmake ninja meson nasm yasm zlib autoconf libtool automake pkg-config
       - name: Restore native build cache
