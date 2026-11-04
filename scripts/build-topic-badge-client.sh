@@ -29,6 +29,13 @@ p = Path('Telegram.xcodeproj/project.pbxproj')
 source = p.read_text()
 assert 'ru.keepcoder.Telegram' in source
 p.write_text(source.replace('ru.keepcoder.Telegram', 'org.freng35.TelegramTopicBadgeTest'))
+
+p = Path('core-xprojects/tde2e/tde2e/build.sh')
+source = p.read_text()
+old = '    -DCMAKE_OSX_ARCHITECTURES='
+assert source.count(old) == 2
+source = source.replace(old, '    -DCMAKE_SYSTEM_NAME=Darwin \\\n' + old)
+p.write_text(source)
 PY
 
 if ! scripts/flatc --version >/dev/null 2>&1; then
