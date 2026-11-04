@@ -10,6 +10,33 @@ EXPECTED_CORE=25bee393e5989e8e2f720a58ff39c51fd32610ed
 
 python3 - <<'PY'
 from pathlib import Path
+import hashlib
+import subprocess
+expected_hashes = {
+    'packages/InAppSettings/Sources/InAppSettings/ChatListFilterPreferences.swift':
+        '641d48491bb821c505f4b34eaeb616f43769fc866af7f0fd02de469ccd2b635f',
+    'submodules/telegram-ios/submodules/Postbox/Sources/UnreadMessageCountsView.swift':
+        'd38b0fb2a6bc29170546b42381824c047e7e5325d69908bbcfeae639392777b8',
+}
+lines = [
+    'Unofficial test build for muted forum-topic folder badges.',
+    'Architecture: arm64. Ad-hoc signed; not notarized.',
+    'Profile: ~/Library/Application Support/Telegram-TopicBadge-Test/',
+    'The client has a separate bundle identifier and requires a separate login.',
+    'Source: ' + subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+    'Bugfix source commit: 26a0c506ed9d9bb4b96384f00f6d51a0c94ff99f',
+    'Telegram-iOS: ' + subprocess.check_output(['git', '-C', 'submodules/telegram-ios', 'rev-parse', 'HEAD'], text=True).strip(),
+]
+for path, expected_hash in expected_hashes.items():
+    local_hash = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    assert local_hash == expected_hash, path
+    lines.append(f'{local_hash}  {path}')
+Path('dist/build-manifest.txt').write_text('\n'.join(lines) + '\n')
+print('Verified bugfix sources before compilation')
+PY
+
+python3 - <<'PY'
+from pathlib import Path
 p = Path('submodules/tg_owt/src/third_party/abseil-cpp/absl/base/attributes.h')
 source = p.read_text()
 source = source.replace('#define ABSL_ATTRIBUTE_LIFETIME_BOUND [[clang::lifetimebound]]', '#define ABSL_ATTRIBUTE_LIFETIME_BOUND')
@@ -54,6 +81,16 @@ if ! scripts/flatc --version >/dev/null 2>&1; then
 fi
 scripts/flatc --version | tee build-logs/flatc-version.log
 
+if [ -f core-xprojects/tde2e/build/tde2e/lib/libtde2e.a ]; then
+  cmake -S submodules/telegram-ios/third-party/td/td \
+    -B core-xprojects/tde2e/build/native-gen \
+    -DTD_GENERATE_SOURCE_FILES=ON -DCMAKE_OSX_ARCHITECTURES="$(uname -m)" \
+    2>&1 | tee build-logs/td-generation.log
+  cmake --build core-xprojects/tde2e/build/native-gen \
+    --target prepare_cross_compiling --parallel 4 \
+    2>&1 | tee -a build-logs/td-generation.log
+fi
+
 sh scripts/configure_frameworks.sh 2>&1 | tee build-logs/frameworks.log
 
 xcodebuild -workspace Telegram-Mac.xcworkspace \
@@ -72,34 +109,8 @@ APP_PATH="$ROOT_DIR/build/client/Build/Products/Debug/Telegram.app"
 codesign --force --deep --sign - --timestamp=none "$APP_PATH"
 codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 file "$APP_PATH/Contents/MacOS/Telegram"
+[ "$(lipo -archs "$APP_PATH/Contents/MacOS/Telegram")" = arm64 ]
 
-python3 - <<'PY'
-from pathlib import Path
-import hashlib
-import subprocess
-root = Path.cwd()
-paths = [
-    'packages/InAppSettings/Sources/InAppSettings/ChatListFilterPreferences.swift',
-    'submodules/telegram-ios/submodules/Postbox/Sources/UnreadMessageCountsView.swift',
-]
-lines = [
-    'Unofficial test build for muted forum-topic folder badges.',
-    'Architecture: arm64. Ad-hoc signed; not notarized.',
-    'Profile: ~/Library/Application Support/Telegram-TopicBadge-Test/',
-    'The client has a separate bundle identifier and requires a separate login.',
-    'Source: ' + subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
-    'Telegram-iOS: ' + subprocess.check_output(['git', '-C', 'submodules/telegram-ios', 'rev-parse', 'HEAD'], text=True).strip(),
-]
-for path in paths:
-    local_hash = hashlib.sha256((root / path).read_bytes()).hexdigest()
-    if path.startswith('submodules/telegram-ios/'):
-        expected = subprocess.check_output(['git', '-C', 'submodules/telegram-ios', 'show', 'HEAD:' + path.removeprefix('submodules/telegram-ios/')])
-    else:
-        expected = subprocess.check_output(['git', 'show', '26a0c506ed9d9bb4b96384f00f6d51a0c94ff99f:' + path])
-    assert local_hash == hashlib.sha256(expected).hexdigest(), path
-    lines.append(f'{local_hash}  {path}')
-Path('dist/build-manifest.txt').write_text('\n'.join(lines) + '\n')
-PY
 
 ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" dist/Telegram-TopicBadge-Test-arm64.zip
 shasum -a 256 dist/Telegram-TopicBadge-Test-arm64.zip >> dist/build-manifest.txt
